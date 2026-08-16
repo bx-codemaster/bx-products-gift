@@ -25,11 +25,20 @@ $aTabs = [
 
 $tabControl = new CAdminTabControl('tabControl', $aTabs);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
-    Option::set($MODULE_ID, 'gift_product_id', (int)$_POST['gift_product_id']);
-    Option::set($MODULE_ID, 'gift_quantity',   max(1, (int)$_POST['gift_quantity']));
+$errorMessage = '';
 
-    LocalRedirect($APPLICATION->GetCurPage() . '?lang=' . LANGUAGE_ID . '&mid=' . urlencode($MODULE_ID) . '&saved=Y');
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
+    $submittedProductId = (int)$_POST['gift_product_id'];
+    $submittedQuantity  = max(1, (int)$_POST['gift_quantity']);
+
+    if ($submittedProductId <= 0) {
+        $errorMessage = Loc::getMessage('BX_PRODUCTS_GIFT_OPTIONS_ERROR_PRODUCT_ID');
+    } else {
+        Option::set($MODULE_ID, 'gift_product_id', $submittedProductId);
+        Option::set($MODULE_ID, 'gift_quantity',   $submittedQuantity);
+
+        LocalRedirect($APPLICATION->GetCurPage() . '?lang=' . LANGUAGE_ID . '&mid=' . urlencode($MODULE_ID) . '&saved=Y');
+    }
 }
 
 $giftProductId = (int)Option::get($MODULE_ID, 'gift_product_id', 0);
@@ -37,8 +46,12 @@ $giftQuantity  = (int)Option::get($MODULE_ID, 'gift_quantity',   1);
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
-if ($_GET['saved'] === 'Y') {
+if (($_GET['saved'] ?? '') === 'Y') {
     CAdminMessage::ShowMessage(['TYPE' => 'OK', 'MESSAGE' => Loc::getMessage('BX_PRODUCTS_GIFT_OPTIONS_SAVED')]);
+}
+
+if (!empty($errorMessage)) {
+    CAdminMessage::ShowMessage(['TYPE' => 'ERROR', 'MESSAGE' => $errorMessage]);
 }
 
 ?>

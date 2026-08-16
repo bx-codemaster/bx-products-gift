@@ -46,7 +46,11 @@ class EventHandlers
 
         // Add the gift product to the basket.
         $giftItem = $basket->createItem('catalog', $giftProductId);
-        $giftItem->setFields([
+        if (!($giftItem instanceof BasketItem)) {
+            return;
+        }
+
+        $result = $giftItem->setFields([
             'QUANTITY'   => $giftQuantity,
             'CURRENCY'   => \Bitrix\Currency\CurrencyManager::getBaseCurrency(),
             'LID'        => Context::getCurrent()->getSite(),
@@ -56,11 +60,22 @@ class EventHandlers
             'BASE_PRICE' => 0,
             'CAN_BUY'    => 'Y',
         ]);
+
+        if ($result instanceof \Bitrix\Main\Result && !$result->isSuccess()) {
+            $basket->deleteItem($giftItem);
+        }
     }
 
     private static function getProductName(int $productId): string
     {
-        $element = \CIBlockElement::GetByID($productId)->Fetch();
-        return $element ? $element['NAME'] : '';
+        $res = \CIBlockElement::GetList(
+            [],
+            ['ID' => $productId, 'ACTIVE' => 'Y'],
+            false,
+            ['nTopCount' => 1],
+            ['NAME']
+        );
+        $element = $res->Fetch();
+        return $element ? (string)$element['NAME'] : '';
     }
 }
