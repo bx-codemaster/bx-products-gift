@@ -21,13 +21,17 @@
 
 	define('BX_TEXT_PRODUCTS_NAME', 'Product name');
 	define('BX_TEXT_TRANSLATION_MISSING', '<span style="color: red;">Translation missing</span>');
-	define('BX_TEXT_PRODUCTS_GIFT_SUM', 'Free from:');
-	define('BX_TEXT_PRODUCTS_GIFT_SUM_UPDATE', 'Update free from');
+	define('BX_TEXT_PRODUCTS_GIFT_SUM', 'Free on orders of:');
+	define('BX_TEXT_PRODUCTS_GIFT_SUM_UPDATE', 'Update &quot;Free on ...&quot;');
 	define('BX_TEXT_PRODUCTS_GIFT_GROUP', 'Visible to customer group');
 	define('BX_TEXT_PRODUCTS_GIFT_ID', 'ID');
 	define('BX_TEXT_PRODUCTS_GIFT_ACTION', 'Action');
 
-	define('BX_TEXT_PRODUCTS_GIFT_DELETE', 'Delete');	
+	define('BX_TEXT_PRODUCTS_GIFT_DELETE', 'Delete');
+	define('BX_TEXT_PRODUCTS_GIFT_SAVE', 'Save');
+
+	define('BX_TEXT_ENTER_NET', 'Enter net amount...');
+	define('BX_TEXT_ENTER_GROSS', 'Enter gross amount...');
 
 	define('BX_TEXT_NET', 'Net');
 	define('BX_TEXT_GROSS', 'Gross');

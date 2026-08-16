@@ -72,8 +72,7 @@
 		break;
 
 		default:
-    // alle anzeigen
-		// alle gratisartikel einlesen
+    // alle anzeigen, alle gratisartikel einlesen
 /*
 		$products_gift = "SELECT 
 				p.products_id, 
@@ -152,7 +151,7 @@
               <?php
                 // pulldown bilden
                 $products_array[] = array('id' => '', 'text' => TEXT_SELECT);
-
+                $i = 1;
                 while($products_gift = xtc_db_fetch_array($products_gift_query, true)) {
                   // prüfen welche artikel bereits in der tabelle eingetragen sind und aus dem dropdown entfernen
                   $products_gift_table_true = " SELECT products_gift_id, 
@@ -170,8 +169,9 @@
                     
                     $products_array[] = array(
                       'id'   => $products_gift['products_id'],
-                      'text' => $products_gift['products_id'].': '.$products_gift['products_name'].' - '.$price_round
+                      'text' => $i. '.) ' . $products_gift['products_id'].': '.$products_gift['products_name'].' - '.$price_round
                     );
+                    $i++;                    
                   }	
                 }
                 
@@ -183,21 +183,21 @@
                         <strong><?php echo BX_TEXT_PRODUCTS_NAME; ?></strong>
                       </td>
                       <td class="dataTableContent">
-                        <?php echo bx_draw_pull_down_menu('products_gift', $products_array, '', 'style="width:300px;"'); ?>
+                        <?php echo bx_draw_pull_down_menu('products_gift', $products_array, '', 'style="width: 100%; max-width: 350px;"'); ?>
                       </td>
                       <td class="dataTableContent">
                         <strong><?php echo BX_TEXT_PRODUCTS_GIFT_SUM; ?></strong>
                       </td>
                       <td class="dataTableContent">
                         <div class="input-row" style="display: flex; gap: 10px;">
-                          <div style="flex: 1; display: flex; flex-direction: column;">
+                          <div style="flex: 1; display: flex; flex-direction: column; min-width: 50px;">
                             <?php
-                              echo xtc_draw_input_field('products_gift_sum', '', 'id="gift_sum_netto_0" placeholder="Netto eingeben..."');
+                              echo xtc_draw_input_field('products_gift_sum', '', 'id="gift_sum_netto_0" placeholder="'.BX_TEXT_ENTER_NET.'"');
                             ?>
                           </div>
-                          <div style="flex: 1; display: flex; flex-direction: column;">
+                          <div style="flex: 1; display: flex; flex-direction: column; min-width: 50px;">
                             <?php
-                              echo xtc_draw_input_field('dummy', '', 'id="gift_sum_brutto_0" placeholder="Brutto eingeben..."');
+                              echo xtc_draw_input_field('dummy', '', 'id="gift_sum_brutto_0" placeholder="'.BX_TEXT_ENTER_GROSS.'"');
                             ?>
                           </div>
                         </div>
@@ -211,7 +211,7 @@
                         <strong><?php echo BX_TEXT_PRODUCTS_GIFT_GROUP; ?></strong>
                       </td>
                       <td class="dataTableContent">
-                        <div class="main customers-groups">
+                        <div class="main customers-groups" style="max-width: 100%; width: auto; float: none;">
                         <?php
                           if (GROUP_CHECK == 'true') {
                               $giftInfo = new stdClass();
@@ -252,16 +252,14 @@
                                           pg.customers_groups,
                                           p.products_tax_class_id,
                                           pd.products_name
-                                        FROM ".
-                                          TABLE_PRODUCTS." p,".
-                                          TABLE_PRODUCTS_DESCRIPTION." pd,".
-                                          TABLE_BX_PRODUCTS_GIFT." pg
-                                        WHERE 
-                                          pg.products_id = p.products_id
-                                          AND p.products_id = pd.products_id
+                                        FROM ".TABLE_BX_PRODUCTS_GIFT." pg
+                                        JOIN ".TABLE_PRODUCTS." p 
+                                          ON pg.products_id = p.products_id
+                                        LEFT JOIN ".TABLE_PRODUCTS_DESCRIPTION." pd 
+                                          ON p.products_id = pd.products_id
                                           AND pd.language_id = '".(int)$_SESSION['languages_id']."'
-                                        ORDER BY pg.products_gift_sum ASC";
-			
+                                        ORDER BY pg.products_gift_id ASC";
+
                 $products_gift_table_query = xtc_db_query($products_gift_table);
                 $i = 0;
                 while($products_gift = xtc_db_fetch_array($products_gift_table_query)) {
@@ -307,7 +305,7 @@
                   </td>
                   <td class="dataTableContent" style="vertical-align: bottom !important;">
                     <!-- Button ruft JS-Funktion mit der ID auf -->
-                     <img src="images/icons/icon_save_50.png" onclick="saveRow(<?php echo $products_gift['products_gift_id']; ?>);" style="cursor:pointer; max-height: 24px;" alt="Speichern" />
+                     <img src="images/icons/icon_save_50.png" onclick="saveRow(<?php echo $products_gift['products_gift_id']; ?>);" title="<?php echo BX_TEXT_PRODUCTS_GIFT_SUM_UPDATE; ?>" style="cursor:pointer; max-height: 24px;" alt="<?php echo BX_TEXT_PRODUCTS_GIFT_SAVE; ?>" />
                      
                     <?php
                       echo '<a href="'.xtc_href_link(FILENAME_BX_PRODUCTS_GIFT,'action=delete&amp;id='.$products_gift['products_gift_id']).'">'
