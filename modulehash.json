@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "scopes": {
+        "shop-root": {
+            "hashes": {
+                "/admin/bx_products_gift.php": "848f1a205f1110ce4742a6ab3cd8f73f",
+                "/admin/images/icons/heading/bx_products_gift.png": "a7b5ad3405c3ec2d110360c38fcbe5f5",
+                "/admin/images/icons/icons/icon_delete.png": "e6f8ba33c5c23e6e9b365ed03d813ff7",
+                "/admin/images/icons/icons/icon_save_50.png": "076790e1bcca854e02015ce877d350b8",
+                "/admin/includes/extra/css/bx_products_gift.php": "687fdb2608bd6c1dab73b0f82119e688",
+                "/admin/includes/extra/filenames/bx_products_gift.php": "d55fff3dcc2bfb9bbbaa58f0a9a0e5ba",
+                "/admin/includes/extra/functions/bx_products_gift.php": "37dce86a19d6a1789cd6f5d901b6d389",
+                "/admin/includes/extra/javascript/bx_products_gift.php": "2829ada59b7cb397726fba396b1eec7b",
+                "/admin/includes/extra/menu/bx_products_gift.php": "e3ae3ae9d22fd258d8b24d1656a8d5af",
+                "/admin/includes/modules/system/bx_products_gift.php": "b431109604313cbef26cdd6ad8a50199",
+                "/includes/extra/database_tables/bx_products_gift.php": "dd6843a977f03081400b0e732114f138",
+                "/lang/english/extra/admin/bx_products_gift.php": "8b458d1cefb071e974956371804ac385",
+                "/lang/english/modules/system/bx_products_gift.php": "228e78b081f707f03d256a7733ecdd00",
+                "/lang/german/extra/admin/bx_products_gift.php": "e7bf5d4af57d9b33699d051a56c6e604",
+                "/lang/german/modules/system/bx_products_gift.php": "1e098e014ba023d0f8ecf682ded0477f"
+            }
+        },
+        "shop-vendor-mmlc": {
+            "hashes": []
+        }
+    }
+}
