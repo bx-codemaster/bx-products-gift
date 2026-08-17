@@ -26,12 +26,22 @@
 	define('BX_TEXT_PRODUCTS_GIFT_GROUP', 'Visible to customer group');
 	define('BX_TEXT_PRODUCTS_GIFT_ID', 'ID');
 	define('BX_TEXT_PRODUCTS_GIFT_ACTION', 'Action');
+	define('BX_TEXT_PRODUCTS_GIFT_CREATED_AT', 'Created at');
 
+	define('BX_TEXT_PRODUCTS_GIFT_CONFIRM_DELETE', 'Are you sure you want to delete this product gift?');
 	define('BX_TEXT_PRODUCTS_GIFT_DELETE', 'Delete');
 	define('BX_TEXT_PRODUCTS_GIFT_SAVE', 'Save');
 
 	define('BX_TEXT_ENTER_NET', 'Enter net amount...');
 	define('BX_TEXT_ENTER_GROSS', 'Enter gross amount...');
+
+	define('BX_TEXT_SELECT_CATEGORY', 'Please select a category first');
+	define('BX_TEXT_LOADING_PRODUCTS', 'Loading products ...');
+	define('BX_TEXT_NO_PRODUCTS_AVAILABLE', 'No products available');
+	define('BX_TEXT_SELECT_PRODUCT', 'Please select a product');
+	define('BX_TEXT_PRODUCTS_LOAD_FAILED', 'Products could not be loaded');
+	define('BX_ERROR_INVALID_PRODUCT_SELECTION', 'Please select a valid category and an available product.');
+	define('BX_TEXT_SELECT_CUSTOMER_GROUP', 'Please select at least one customer group.');
 
 	define('BX_TEXT_NET', 'Net');
 	define('BX_TEXT_GROSS', 'Gross');

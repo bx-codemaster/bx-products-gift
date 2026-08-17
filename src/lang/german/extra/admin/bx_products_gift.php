@@ -26,15 +26,25 @@
 	define('BX_TEXT_PRODUCTS_GIFT_GROUP', 'Sichtbar für Kundengruppe');
 	define('BX_TEXT_PRODUCTS_GIFT_ID', 'ID');
 	define('BX_TEXT_PRODUCTS_GIFT_ACTION', 'Aktion');
+	define('BX_TEXT_PRODUCTS_GIFT_CREATED_AT', 'Erstellt am');
 
+	define('BX_TEXT_PRODUCTS_GIFT_CONFIRM_DELETE', 'Diese Produktzugabe wirklich löschen?');
 	define('BX_TEXT_PRODUCTS_GIFT_DELETE', 'Löschen');
 	define('BX_TEXT_PRODUCTS_GIFT_SAVE', 'Speichern');
 	
 	define('BX_TEXT_ENTER_NET', 'Netto eingeben...');
 	define('BX_TEXT_ENTER_GROSS', 'Brutto eingeben...');
+
+	define('BX_TEXT_SELECT_CATEGORY', 'Bitte zuerst eine Kategorie wählen');
+	define('BX_TEXT_LOADING_PRODUCTS', 'Lade Produkte ...');
+	define('BX_TEXT_NO_PRODUCTS_AVAILABLE', 'Keine verfügbaren Produkte');
+	define('BX_TEXT_SELECT_PRODUCT', 'Bitte Produkt wählen');
+	define('BX_TEXT_PRODUCTS_LOAD_FAILED', 'Produkte konnten nicht geladen werden');
+	define('BX_ERROR_INVALID_PRODUCT_SELECTION', 'Bitte wählen Sie eine gültige Kategorie und ein verfügbares Produkt.');
+	define('BX_TEXT_SELECT_CUSTOMER_GROUP', 'Bitte mindestens eine Kundengruppe auswählen.');
 	
 	define('BX_TEXT_NET', 'Netto');
 	define('BX_TEXT_GROSS', 'Brutto');
 
 	define('BX_HEADING_RIGHT', 'Systemmeldungen');
-	define('BX_CONTENT_RIGHT', 'Meldungen des Systems');
+	define('BX_CONTENT_RIGHT', 'Aktuelle Währung: ');

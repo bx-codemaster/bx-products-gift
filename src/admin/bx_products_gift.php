@@ -18,10 +18,69 @@
 
   require_once(DIR_WS_CLASSES.'categories.php');
   require_once(DIR_FS_INC.'xtc_get_tax_rate.inc.php');
+  require_once(DIR_FS_INC.'xtc_datetime_short.inc.php');
+  
+  // Währungssymbol mit NumberFormatter ermitteln
+  $currency = 'EUR';
+  $currency_symbol = '&euro;'; // Fallback
+  if (class_exists('NumberFormatter')) {
+      $formatter = new NumberFormatter(DATE_LOCALE, NumberFormatter::CURRENCY);
+      $currency_symbol = $formatter->getSymbol(NumberFormatter::CURRENCY_SYMBOL);
+      $formatter->setTextAttribute(NumberFormatter::CURRENCY_CODE, $currency);
+      $currency_symbol = $formatter->getSymbol(NumberFormatter::CURRENCY_SYMBOL);
+  }
 
-  $actionWhitelist = array('delete', 'update', 'updateOrginal', 'new');
+  $actionWhitelist = array('delete', 'update', 'updateOrginal', 'new', 'load_products', 'get_gift_table');
+
   $action = (isset($_GET['action']) && in_array($_GET['action'], $actionWhitelist)) ? $_GET['action'] : '';
+  
   switch ($action) {
+    case 'load_products':
+      header('Content-Type: application/json; charset=utf-8');
+
+      $category_id = isset($_GET['catID']) ? (int)$_GET['catID'] : 0;
+      $products_response = array();
+
+      if ($category_id > 0) {
+        $products_query = xtc_db_query(
+          "SELECT DISTINCT
+                    p.products_id,
+                    p.products_price,
+                    p.products_tax_class_id,
+                    pd.products_name
+             FROM " . TABLE_PRODUCTS . " p
+             INNER JOIN " . TABLE_PRODUCTS_DESCRIPTION . " pd
+                     ON pd.products_id = p.products_id
+             INNER JOIN " . TABLE_PRODUCTS_TO_CATEGORIES . " p2c
+                     ON p2c.products_id = p.products_id
+             LEFT JOIN " . TABLE_BX_PRODUCTS_GIFT . " pg
+                    ON pg.products_id = p.products_id
+            WHERE p2c.categories_id = " . $category_id . "
+              AND pd.language_id = " . (int)$_SESSION['languages_id'] . "
+              AND pg.products_id IS NULL
+            ORDER BY pd.products_name"
+        );
+
+        while ($product = xtc_db_fetch_array($products_query, true)) {
+          $price_gross = $product['products_price']
+            * (xtc_get_tax_rate($product['products_tax_class_id']) / 100)
+            + $product['products_price'];
+
+          $products_response[] = array(
+            'id' => (int)$product['products_id'],
+            'text' => (int)$product['products_id'] . ': '
+              . $product['products_name'] . ' - '
+              . round($price_gross, PRICE_PRECISION),
+          );
+        }
+      }
+
+      echo json_encode(array(
+        'success' => true,
+        'products' => $products_response,
+      ), JSON_UNESCAPED_UNICODE);
+      exit;
+
     case 'delete': 
       xtc_db_query("DELETE FROM ".TABLE_BX_PRODUCTS_GIFT." WHERE products_gift_id = '".(int)$_GET['id']."'");
 			xtc_redirect(xtc_href_link(FILENAME_BX_PRODUCTS_GIFT));
@@ -52,6 +111,28 @@
 		break;
     
     case 'new':
+      $products_id = (int)($_POST['products_gift'] ?? 0);
+      $category_id = (int)($_POST['catID'] ?? 0);
+
+      $product_check_query = xtc_db_query(
+        "SELECT p.products_id
+           FROM " . TABLE_PRODUCTS . " p
+           INNER JOIN " . TABLE_PRODUCTS_TO_CATEGORIES . " p2c
+                   ON p2c.products_id = p.products_id
+           LEFT JOIN " . TABLE_BX_PRODUCTS_GIFT . " pg
+                  ON pg.products_id = p.products_id
+          WHERE p.products_id = " . $products_id . "
+            AND p2c.categories_id = " . $category_id . "
+            AND pg.products_id IS NULL
+          LIMIT 1"
+      );
+
+      if ($products_id <= 0 || $category_id <= 0 || xtc_db_num_rows($product_check_query) === 0) {
+        $messageStack->add_session(BX_ERROR_INVALID_PRODUCT_SELECTION, 'error');
+        xtc_redirect(xtc_href_link(FILENAME_BX_PRODUCTS_GIFT));
+        exit;
+      }
+
 			// Kundengruppen einlesen (Checkbox-Feld fehlt im POST, wenn keine Gruppe angehakt wurde)
 			$groups_post = (isset($_POST['groups']) && is_array($_POST['groups'])) ? $_POST['groups'] : array();
 			$groups_anz  = count($groups_post);
@@ -63,46 +144,64 @@
 			}
 			
 			$products_gift_array = array(
-				'products_id' 			=> xtc_db_prepare_input($_POST['products_gift']),
+        'products_id' 			=> $products_id,
 				'products_gift_sum' => xtc_db_prepare_input($_POST['products_gift_sum']),
-				'customers_groups' 	=> xtc_db_prepare_input($groups_list) );
+				'customers_groups' 	=> xtc_db_prepare_input($groups_list),
+        'created_at'        => 'now()'
+      );
 							
 			xtc_db_perform(TABLE_BX_PRODUCTS_GIFT, $products_gift_array);
 			xtc_redirect(xtc_href_link(FILENAME_BX_PRODUCTS_GIFT));
 		break;
+    case 'get_gift_table':
+      header('Content-Type: application/json; charset=utf-8');
 
-		default:
-    // alle anzeigen, alle gratisartikel einlesen
-/*
-		$products_gift = "SELECT 
-				p.products_id, 
-				p.products_price,
-				p.products_tax_class_id,
-				pd.products_name
-			FROM ".TABLE_PRODUCTS." p,
-				".TABLE_PRODUCTS_DESCRIPTION." pd
-			WHERE p.products_gift = '1'
-			AND p.products_id = pd.products_id
-			AND pd.language_id = '".(int)$_SESSION['languages_id']."'
-			ORDER BY p.products_id ASC";
-*/      
-    $products_gift = "SELECT 
-                        p.products_id,
-                        p.products_price,
-                        p.products_tax_class_id,
-                        pd.products_name
-                      FROM ".
-                        TABLE_PRODUCTS." p, ".
-                        TABLE_PRODUCTS_DESCRIPTION." pd,".
-                        TABLE_PRODUCTS_TO_CATEGORIES." p2c
-                      WHERE 
-                        p.products_id = pd.products_id
-                        AND p.products_id = p2c.products_id
-                        AND pd.language_id = '".(int)$_SESSION['languages_id']."'
-                      ORDER BY pd.products_name";
+      $products_gift_table = "SELECT 
+                                pg.products_gift_id, 
+                                pg.products_gift_sum,
+                                pg.customers_groups,
+                                pg.created_at,
+                                p.products_tax_class_id,
+                                pd.products_name
+                              FROM ".TABLE_BX_PRODUCTS_GIFT." pg
+                              JOIN ".TABLE_PRODUCTS." p 
+                                ON pg.products_id = p.products_id
+                              LEFT JOIN ".TABLE_PRODUCTS_DESCRIPTION." pd 
+                                ON p.products_id = pd.products_id
+                                AND pd.language_id = '".(int)$_SESSION['languages_id']."'
+                              ORDER BY pg.products_gift_id ASC";
 
-		$products_gift_query = xtc_db_query($products_gift);
-  }
+      $products_gift_table_query = xtc_db_query($products_gift_table);
+      $data = array();
+
+      while($products_gift = xtc_db_fetch_array($products_gift_table_query)) {
+        $name = empty($products_gift['products_name']) ? BX_TEXT_TRANSLATION_MISSING : $products_gift['products_name'];
+        
+        // Kundengruppen-Namen aufbereiten
+        $group_list       = explode(',', $products_gift['customers_groups']);
+        $group_list_count = count($group_list);
+
+        for($a = 0; $a < $group_list_count; $a++) {
+          $group_list[$a] = trim($group_list[$a]) === 'all'
+            ? TXT_ALL
+            : xtc_get_customers_status_name($group_list[$a], $_SESSION['languages_id']);
+        }
+
+        $tax_rate = (float)xtc_get_tax_rate($products_gift['products_tax_class_id']);
+
+        $data[] = array(
+          'id'            => (int)$products_gift['products_gift_id'],
+          'name'          => $name,
+          'groups'        => implode(', ', $group_list),
+          'sum'           => $products_gift['products_gift_sum'],
+          'tax_rate'      => $tax_rate,
+          'created_at'    => xtc_datetime_short($products_gift['created_at'])
+        );
+      }
+
+      echo json_encode(array('success' => true, 'items' => $data), JSON_UNESCAPED_UNICODE);
+      exit;  
+    }
   
   require_once (DIR_WS_INCLUDES.'head.php');
 
@@ -149,61 +248,42 @@
             <div class="boxCenter">
               <div class="clear">
               <?php
-                // pulldown bilden
-                $products_array[] = array('id' => '', 'text' => TEXT_SELECT);
-                $i = 1;
-                while($products_gift = xtc_db_fetch_array($products_gift_query, true)) {
-                  // prüfen welche artikel bereits in der tabelle eingetragen sind und aus dem dropdown entfernen
-                  $products_gift_table_true = " SELECT products_gift_id, 
-                                                       products_id
-                                                FROM " . TABLE_BX_PRODUCTS_GIFT . "
-                                                WHERE products_id = '".$products_gift['products_id']."'";
-                    
-                  $products_gift_table_true_query = xtc_db_query($products_gift_table_true);
-                  $products_gift_true             = xtc_db_fetch_array($products_gift_table_true_query);
-                  
-                  if(!$products_gift_true) {
-                    // mwst. dazu rechnen
-                    $price_mwst  = ($products_gift['products_price'] * (xtc_get_tax_rate($products_gift['products_tax_class_id']) / 100) + $products_gift['products_price']);
-                    $price_round = round($price_mwst, PRICE_PRECISION);
-                    
-                    $products_array[] = array(
-                      'id'   => $products_gift['products_id'],
-                      'text' => $i. '.) ' . $products_gift['products_id'].': '.$products_gift['products_name'].' - '.$price_round
-                    );
-                    $i++;                    
-                  }	
-                }
-                
+                $products_array    = array(array('id' => '', 'text' => BX_TEXT_SELECT_CATEGORY));
+                $gift_sum_tax_rate = xtc_get_tax_rate('1');
+
                 echo xtc_draw_form('products_gift', FILENAME_BX_PRODUCTS_GIFT, 'action=new', 'post','');
                 ?>
                   <table class="tableBoxCenter collapse">
                     <tr class="dataTableRow">
-                      <td class="dataTableContent">
-                        <strong><?php echo BX_TEXT_PRODUCTS_NAME; ?></strong>
+                      <td class="dataTableContent" style="vertical-align: top !important;">
+                        <p class="column-label"><?php echo BX_TEXT_PRODUCTS_NAME; ?></p>
                       </td>
                       <td class="dataTableContent">
-                        <?php echo bx_draw_pull_down_menu('products_gift', $products_array, '', 'style="width: 100%; max-width: 350px;"'); ?>
-                      </td>
-                      <td class="dataTableContent">
-                        <strong><?php echo BX_TEXT_PRODUCTS_GIFT_SUM; ?></strong>
-                      </td>
-                      <td class="dataTableContent">
-                        <div class="input-row" style="display: flex; gap: 10px;">
-                          <div style="flex: 1; display: flex; flex-direction: column; min-width: 50px;">
-                            <?php
-                              echo xtc_draw_input_field('products_gift_sum', '', 'id="gift_sum_netto_0" placeholder="'.BX_TEXT_ENTER_NET.'"');
-                            ?>
+
+                        <div class="gift-select-row">
+                          <div class="gift-select-column">
+                            <p class="column-label">Kategorie</p>
+                            <?php echo xtc_draw_pull_down_menu('catID', xtc_get_category_tree('0'), ( isset($_GET['catID']) ? $_GET['catID'] : 0 ), ''); ?>
                           </div>
-                          <div style="flex: 1; display: flex; flex-direction: column; min-width: 50px;">
-                            <?php
-                              echo xtc_draw_input_field('dummy', '', 'id="gift_sum_brutto_0" placeholder="'.BX_TEXT_ENTER_GROSS.'"');
-                            ?>
+                          <div class="gift-select-column">
+                            <p class="column-label">Produkt</p>
+                            <?php echo xtc_draw_pull_down_menu('products_gift', $products_array); ?>
+                          </div>                          
+                          <div class="gift-select-column">
+                            <p class="column-label"><?php echo BX_TEXT_PRODUCTS_GIFT_SUM; ?></p>
+                            <div class="gift-select-subrow">
+                              <div style="min-width: 50px;">
+                                <?php echo xtc_draw_input_field('products_gift_sum', '', 'id="gift_sum_netto_0" data-tax-rate="' . (float)$gift_sum_tax_rate . '" placeholder="'.BX_TEXT_ENTER_NET.'"'); ?>
+                              </div>
+                              <div style="min-width: 50px;">
+                                <?php echo xtc_draw_input_field('dummy', '', 'id="gift_sum_brutto_0" data-tax-rate="' . (float)$gift_sum_tax_rate . '" placeholder="'.BX_TEXT_ENTER_GROSS.'"'); ?>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td class="dataTableContent">
-                        <?php echo '<input type="submit" class="button" onclick="this.blur(); return bxValidateGiftGroups(this.form);" value="' . BUTTON_SAVE . '"/>'; ?>
+                        &nbsp;
                       </td>
                     </tr>
                     <tr>
@@ -211,7 +291,7 @@
                         <strong><?php echo BX_TEXT_PRODUCTS_GIFT_GROUP; ?></strong>
                       </td>
                       <td class="dataTableContent">
-                        <div class="main customers-groups" style="max-width: 100%; width: auto; float: none;">
+                        <div class="main gift-customer-groups">
                         <?php
                           if (GROUP_CHECK == 'true') {
                               $giftInfo = new stdClass();
@@ -224,108 +304,36 @@
                               $catfunc = new categories();
                               // "Alle"-Checkbox ist in categories.php immer vorbelegt, wenn pID/cID fehlen -> hier entfernen
                               $permission_checkboxes = str_replace('checked="checked" id="cgAll"', 'id="cgAll"', $catfunc->create_permission_checkboxes($giftInfo));
+                              $permission_checkboxes = preg_replace('/<br\s*\/?\s*>/i', ' 🔸 ', $permission_checkboxes);
+                              $permission_checkboxes = preg_replace('/\s*🔸\s*$/u', '', $permission_checkboxes);
                               echo $permission_checkboxes;
                           }
                         ?>
                         </div>
                       </td>
-                      <td class="dataTableContent">&nbsp;</td>
-                      <td class="dataTableContent">&nbsp;</td>
-                      <td class="dataTableContent">&nbsp;</td>
+                      <td class="dataTableContent">
+                        <?php echo '<input type="submit" class="button" style="margin: 0;" onclick="this.blur(); return bxValidateGiftGroups(this.form);" value="' . BUTTON_SAVE . '"/>'; ?>
+                      </td>
                     </tr>
                   </table>
                 </form>
               </div>
-
+              <br>
               <table class="tableBoxCenter collapse">
-                <tr class="dataTableHeadingRow">
-                  <td class="dataTableHeadingContent txta-c" width="5%"><?php echo BX_TEXT_PRODUCTS_GIFT_ID; ?></td>
-                  <td class="dataTableHeadingContent" width="60%"><?php echo BX_TEXT_PRODUCTS_NAME; ?></td>
-                  <td class="dataTableHeadingContent" width="15%"><?php echo BX_TEXT_PRODUCTS_GIFT_SUM; ?></td>
-                  <td class="dataTableHeadingContent" width="10%" colspan="2"><?php echo BX_TEXT_PRODUCTS_GIFT_ACTION; ?></td>
-                </tr>
-                <?php
-                // eingestellte Artikel anzeigen
-                $products_gift_table = "SELECT 
-                                          pg.products_gift_id, 
-                                          pg.products_gift_sum,
-                                          pg.customers_groups,
-                                          p.products_tax_class_id,
-                                          pd.products_name
-                                        FROM ".TABLE_BX_PRODUCTS_GIFT." pg
-                                        JOIN ".TABLE_PRODUCTS." p 
-                                          ON pg.products_id = p.products_id
-                                        LEFT JOIN ".TABLE_PRODUCTS_DESCRIPTION." pd 
-                                          ON p.products_id = pd.products_id
-                                          AND pd.language_id = '".(int)$_SESSION['languages_id']."'
-                                        ORDER BY pg.products_gift_id ASC";
-
-                $products_gift_table_query = xtc_db_query($products_gift_table);
-                $i = 0;
-                while($products_gift = xtc_db_fetch_array($products_gift_table_query)) {
-                  $products_gift['products_name'] = empty($products_gift['products_name']) ? BX_TEXT_TRANSLATION_MISSING : $products_gift['products_name'];
-                ?>
-                <tr class="dataTableRow">
-                  <td class="dataTableContent txta-c"><?php echo $products_gift['products_gift_id'];?></td>
-                  <td class="dataTableContent">
-                  <?php 
-                  echo $products_gift['products_name'] . xtc_draw_hidden_field('products_gift_id',$products_gift['products_gift_id']);
-                  echo '<br><span class="extra_fast">'.BX_TEXT_PRODUCTS_GIFT_GROUP.':</span> ';
-
-                  $group_list       = explode(',', $products_gift['customers_groups']);
-                  $group_list_count = count($group_list);
-  
-                  for($a = 0; $a < $group_list_count; $a++) {
-                    $group_list[$a] = xtc_get_customers_status_name($group_list[$a], $_SESSION['languages_id']);
-                  }
-                  echo implode(', ', $group_list);
-                  ?></td>
-                  <td class="dataTableContent">
-
-                    <div class="input-row" style="display: flex; gap: 10px;">
-                      <div style="flex: 1; display: flex; flex-direction: column;">
-                        <label> <?php echo BX_TEXT_NET; ?>
-                        <?php
-                          $gift_sum_tax_rate = xtc_get_tax_rate($products_gift['products_tax_class_id']);
-
-                          // Name bleibt "products_gift_sum", damit case 'update' das Feld findet; id nur für die Netto/Brutto-JS-Kopplung eindeutig je Zeile
-                          echo xtc_draw_input_field('products_gift_sum', $products_gift['products_gift_sum'], 'id="gift_sum_netto_'.$products_gift['products_gift_id'].'" data-tax-rate="' . (float)$gift_sum_tax_rate . '" placeholder="Netto eingeben..." size="10"');
-                        ?>
-                        </label>
-                      </div>
-                      <div style="flex: 1; display: flex; flex-direction: column;">
-                        <label> <?php echo BX_TEXT_GROSS; ?>
-                        <?php
-                          echo xtc_draw_input_field('dummy_'.$products_gift['products_gift_id'], '', 'id="gift_sum_brutto_'.$products_gift['products_gift_id'].'" data-tax-rate="' . (float)$gift_sum_tax_rate . '" placeholder="Brutto eingeben..." size="10"');
-                        ?>
-                        </label>
-                      </div>
-                    </div>
-
-                  </td>
-                  <td class="dataTableContent" style="vertical-align: bottom !important;">
-                    <!-- Button ruft JS-Funktion mit der ID auf -->
-                     <img src="images/icons/icon_save_50.png" onclick="saveRow(<?php echo $products_gift['products_gift_id']; ?>);" title="<?php echo BX_TEXT_PRODUCTS_GIFT_SUM_UPDATE; ?>" style="cursor:pointer; max-height: 24px;" alt="<?php echo BX_TEXT_PRODUCTS_GIFT_SAVE; ?>" />
-                     
-                    <?php
-                      echo '<a href="'.xtc_href_link(FILENAME_BX_PRODUCTS_GIFT,'action=delete&amp;id='.$products_gift['products_gift_id']).'">'
-                      .xtc_image(DIR_WS_IMAGES.'icons/icon_delete_50.png', BX_TEXT_PRODUCTS_GIFT_DELETE, '', '', 'style="max-height: 24px;"').'</a>';
-                    ?>
-                  </td>
-                </tr>
-              <?php
-                  $i++;
-                }
-              ?>
+                <thead>
+                  <tr class="dataTableHeadingRow">
+                    <td class="dataTableHeadingContent txta-c" style="width: 5%;"><?php echo BX_TEXT_PRODUCTS_GIFT_ID; ?></td>
+                    <td class="dataTableHeadingContent" style="width: 40%;"><?php echo BX_TEXT_PRODUCTS_NAME; ?></td>
+                    <td class="dataTableHeadingContent" style="width: 30%;"><?php echo BX_TEXT_PRODUCTS_GIFT_SUM; ?></td>
+                    <td class="dataTableHeadingContent" style="width: 15%;"><?php echo BX_TEXT_PRODUCTS_GIFT_CREATED_AT; ?></td>
+                    <td class="dataTableHeadingContent txta-c" style="width: 10%;"><?php echo BX_TEXT_PRODUCTS_GIFT_ACTION; ?></td>
+                  </tr>
+                </thead>
+                <tbody id="bx-gift-table-body">
+                  <!-- Zeilen werden per AJAX / Staggered Rendering eingefügt -->
+                </tbody>
               </table>
-
-
-
-
-
-              </div>
             </div>
-
           </td>
           <td class="boxRight">
 <?php
@@ -334,7 +342,7 @@
   $contents = array();
 
   $heading[]  = array('text' => '<strong>'.BX_HEADING_RIGHT.'</strong>');
-  $contents[] = array('text' => BX_CONTENT_RIGHT);
+  $contents[] = array('text' => BX_CONTENT_RIGHT. ' '.$currency_symbol);
 
   if ( (xtc_not_null($heading)) && (xtc_not_null($contents)) ) {
     $box = new box;
@@ -366,7 +374,7 @@
 		}
 		var checked = form.querySelectorAll('input[name="groups[]"]:checked');
 		if (checked.length === 0) {
-			alert('Bitte mindestens eine Kundengruppe auswählen.');
+      alert(<?php echo json_encode(BX_TEXT_SELECT_CUSTOMER_GROUP); ?>);
 			return false;
 		}
 		return true;
