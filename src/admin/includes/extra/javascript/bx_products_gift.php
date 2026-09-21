@@ -18,9 +18,16 @@
 <script>
 /** 
  * Das Modul verwendet eine IIFE, damit Hilfsvariablen und interne Funktionen nicht in den globalen JavaScript-Namensraum gelangen.
- * Die Initialisierung erfolgt beim DOMContentLoaded-Event, damit die DOM-Elemente bereits verfügbar sind.
+ * Die Initialisierung wartet bei noch ladendem DOM auf DOMContentLoaded;
+ * ist das DOM bereits verfügbar, startet sie unmittelbar.
  */
 (function() {
+    // Referenz auf den aktuell laufenden Tabellen-Timer. Sie verhindert,
+    // dass mehrere zeitversetzte Tabellenaufbauten parallel weiterlaufen.
+    // Der Lade-Token verwirft zusätzlich verspätete AJAX-Antworten älterer Aufrufe.
+    var giftTableInterval = null;
+    var giftTableLoadToken = 0;
+
     /** 
      * Bindet ein Netto-Feld und das zugehörige Brutto-Feld. 
      * Die Zuordnung erfolgt über die gleiche ID-Endung, zum Beispiel die Geschenkartikel-ID.
@@ -38,7 +45,7 @@
         // Beim Laden wird ein vorhandener Netto-Wert einmalig in Brutto umgerechnet, damit beide Felder sofort synchron sind.
         if (nettoInput.value && !isNaN(parseFloat(nettoInput.value.replace(',', '.')))) {
             const initialNetto = parseFloat(nettoInput.value.replace(',', '.'));
-            bruttoInput.value = (initialNetto * faktor).toFixed(3);
+            bruttoInput.value = (initialNetto * faktor).toFixed(3); // drei Nachkommastellen, um Rundungsdifferenzen zu vermeiden
         }
 
         /** 
@@ -48,7 +55,7 @@
         nettoInput.addEventListener('input', function () {
             let wert = parseFloat(this.value.replace(',', '.'));
             if (!isNaN(wert)) {
-                bruttoInput.value = (wert * faktor).toFixed(3);
+                bruttoInput.value = (wert * faktor).toFixed(3); // drei Nachkommastellen, um Rundungsdifferenzen zu vermeiden
             } else {
                 bruttoInput.value = '';
             }
@@ -60,7 +67,7 @@
         bruttoInput.addEventListener('input', function () {
             let wert = parseFloat(this.value.replace(',', '.'));
             if (!isNaN(wert)) {
-                nettoInput.value = (wert / faktor).toFixed(3);
+                nettoInput.value = (wert / faktor).toFixed(3); // drei Nachkommastellen, um Rundungsdifferenzen zu vermeiden
             } else {
                 nettoInput.value = '';
             }
@@ -110,22 +117,41 @@
         }, function(response) {
             // Eine erfolgreiche Serverantwort wird durch kurzes grünes
             // Aufleuchten beider zusammengehöriger Eingabefelder angezeigt.
-            $('#gift_sum_netto_' + giftId).css('background-color', '#36e25e');
-            $('#gift_sum_brutto_' + giftId).css('background-color', '#36e25e');
+            $('#gift_sum_netto_' + giftId).removeClass('bx-save-error').addClass('bx-save-success');
+            $('#gift_sum_brutto_' + giftId).removeClass('bx-save-error').addClass('bx-save-success');
             setTimeout(function() {
-                $('#gift_sum_netto_' + giftId).css('background-color', '');
-                $('#gift_sum_brutto_' + giftId).css('background-color', '');
+                $('#gift_sum_netto_' + giftId).removeClass('bx-save-success');
+                $('#gift_sum_brutto_' + giftId).removeClass('bx-save-success');
             }, 1000);
         }).fail(function() {
             // Bei Netzwerkfehlern oder einer nicht erfolgreichen AJAX-Antwort
             // wird die betroffene Zeile kurz rot markiert.
-            $('#gift_sum_netto_' + giftId).css('background-color', '#f08a8a');
-            $('#gift_sum_brutto_' + giftId).css('background-color', '#f08a8a');
+            $('#gift_sum_netto_' + giftId).removeClass('bx-save-success').addClass('bx-save-error');
+            $('#gift_sum_brutto_' + giftId).removeClass('bx-save-success').addClass('bx-save-error');
             setTimeout(function() {
-                $('#gift_sum_netto_' + giftId).css('background-color', '');
-                $('#gift_sum_brutto_' + giftId).css('background-color', '');
+                $('#gift_sum_netto_' + giftId).removeClass('bx-save-error');
+                $('#gift_sum_brutto_' + giftId).removeClass('bx-save-error');
             }, 1000);
         });
+    }
+
+    /**
+     * Löscht einen Geschenkartikel per AJAX. 
+     * Die Funktion wird weiter unten an window gehängt, weil der Löschen-Button im PHP-HTML über onclick="deleteRow(...)" auf sie zugreift.
+     */
+    function deleteRow(giftId) {
+        if (!window.confirm(<?php echo json_encode(BX_TEXT_PRODUCTS_GIFT_CONFIRM_DELETE); ?>)) {
+            return false;
+        }
+
+        $.post(<?php echo json_encode(FILENAME_BX_PRODUCTS_GIFT . '?action=delete'); ?>, {
+            id: giftId,
+            <?php echo $addPayload; ?>
+        }).done(function() {
+            window.location.reload();
+        });
+
+        return false;
     }
 
     /**
@@ -134,21 +160,36 @@
      */
     function loadGiftTableStaggered(delayMs) {
         var $tbody = $('#bx-gift-table-body');
+        var loadToken = ++giftTableLoadToken;
+
+        // Ein vorheriger Aufbau darf keine weiteren Zeilen mehr einfügen.
+        if (giftTableInterval !== null) {
+            clearInterval(giftTableInterval);
+            giftTableInterval = null;
+        }
 
         // Während des Ladens wird ein neutraler Status in der Tabelle angezeigt.
         $tbody.html('<tr><td colspan="5" class="txta-c" style="padding: 15px;"><?php echo BX_TEXT_LOADING_PRODUCTS; ?></td></tr>');
 
         /**
-         * Die Tabelle wird als JSON geladen. Die PHP-Antwort enthält die bereits aufbereiteten Werte 
-         * für Name, Gruppen, Betrag und Steuersatz.
+         * Die Tabelle wird als JSON geladen. Die PHP-Antwort enthält die bereits
+         * aufbereiteten Werte für Name, Gruppen, Betrag und Steuersatz sowie
+         * die Sprachlabels für die dynamisch erzeugten Eingabefelder und Aktionen.
          */
-        $.getJSON('bx_products_gift.php?action=get_gift_table', function(response) {
+        $.getJSON('<?php echo FILENAME_BX_PRODUCTS_GIFT; ?>?action=get_gift_table', function(response) {
+            // Eine verspätete Antwort eines älteren Aufrufs wird verworfen.
+            if (loadToken !== giftTableLoadToken) return;
+
             // Bei einer fehlgeschlagenen Antwort bleibt der Ladestatus bestehen,
             // damit kein scheinbar leerer Tabelleninhalt angezeigt wird.
             if (!response.success) return;
             
             $tbody.empty();
             var items = response.items;
+            var labels = response.labels;
+
+            // Die Labels stammen aus der aktiven Shop-Sprache und werden beim
+            // Erzeugen jeder dynamischen Tabellenzeile wiederverwendet.
 
             // Ein erfolgreicher Aufruf kann trotzdem keine gespeicherten Geschenkartikel liefern.
             if (items.length === 0) {
@@ -160,9 +201,10 @@
 
             // Jede Zeile wird mit dem gewünschten Abstand einzeln eingefügt.
             // Dadurch erscheinen die Datensätze kontrolliert nacheinander.
-            var interval = setInterval(function() {
+            giftTableInterval = setInterval(function() {
                 if (index >= items.length) {
-                    clearInterval(interval);
+                    clearInterval(giftTableInterval);
+                    giftTableInterval = null;
                     return;
                 }
 
@@ -173,28 +215,28 @@
                 // eindeutig bleiben und korrekt berechnet werden können.
                 var rowHtml = `
                 <tr class="dataTableRow" style="display: none;">
-                    <td class="dataTableContent txta-c">${item.id}</td>
+                    <td class="dataTableContent txta-c">${esc(item.id)}</td>
                     <td class="dataTableContent">
-                    ${item.name} <input type="hidden" name="products_gift_id" value="${item.id}">
-                    <br><span class="extra_fast"><?php echo BX_TEXT_PRODUCTS_GIFT_GROUP; ?>:</span> ${item.groups}
+                    ${esc(item.name)} <input type="hidden" name="products_gift_id" value="${esc(item.id)}">
+                    <br><span class="extra_fast"><?php echo BX_TEXT_PRODUCTS_GIFT_GROUP; ?>:</span> ${esc(item.groups)}
                     </td>
                     <td class="dataTableContent">
                     <div class="gift-select-row">
-                        <label><?php echo BX_TEXT_NET; ?>
-                        <input type="text" name="products_gift_sum" value="${item.sum}" id="gift_sum_netto_${item.id}" data-tax-rate="${item.tax_rate}" placeholder="<?php echo BX_TEXT_ENTER_NET; ?>" size="10">
+                        <label>${labels.net}
+                        <input type="text" name="products_gift_sum" value="${esc(item.sum)}" id="gift_sum_netto_${esc(item.id)}" data-tax-rate="${esc(item.tax_rate)}" placeholder="${labels.enterNet}" size="10">
                         </label>
-                        <label><?php echo BX_TEXT_GROSS; ?>
-                        <input type="text" name="dummy_${item.id}" value="" id="gift_sum_brutto_${item.id}" data-tax-rate="${item.tax_rate}" placeholder="<?php echo BX_TEXT_ENTER_GROSS; ?>" size="10">
+                        <label>${labels.gross}
+                        <input type="text" name="dummy_${esc(item.id)}" value="" id="gift_sum_brutto_${esc(item.id)}" data-tax-rate="${esc(item.tax_rate)}" placeholder="${labels.enterGross}" size="10">
                         </label>
                     </div>
                     </td>
-                    <td class="dataTableContent">${item.created_at}</td>
+                    <td class="dataTableContent">${esc(item.created_at)}</td>
                     <td class="dataTableContent editButtons txta-c">
-                    <a href="javascript:void(0)" onclick="saveRow(${item.id});">  
+                    <a href="javascript:void(0)" onclick="saveRow(${esc(item.id)});">  
                         <img src="images/icons/icon_save_50.png" title="<?php echo BX_TEXT_PRODUCTS_GIFT_SUM_UPDATE; ?>" style="max-height: 24px;" alt="<?php echo BX_TEXT_PRODUCTS_GIFT_SAVE; ?>" />
                     </a>
-                    <a href="javascript:void(0)" onclick="return confirmLink('<?php echo BX_TEXT_PRODUCTS_GIFT_CONFIRM_DELETE; ?>', '<?php echo BX_TEXT_PRODUCTS_GIFT_DELETE; ?>', 'bx_products_gift.php?action=delete&amp;id=${item.id}');">
-                        <?php echo xtc_image(DIR_WS_IMAGES.'icons/icon_delete_50.png', BX_TEXT_PRODUCTS_GIFT_DELETE, '', '', 'style="max-height: 24px;"'); ?>
+                    <a href="javascript:void(0)" onclick="deleteRow(${esc(item.id)});">
+                        <img src="images/icons/icon_delete_50.png" title="${labels.delete}" style="max-height: 24px;" alt="${labels.delete}">
                     </a>
                     </td>
                 </tr>
@@ -379,6 +421,15 @@
     }
 
     /**
+     * Escaped HTML-Entities für die sichere Einbettung von Text in HTML.
+     */
+    function esc(str) {
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+        });
+    }
+
+    /**
      * Wird das Script im <head> geladen, wartet es auf den DOMContentLoaded-Event. 
      * Bei später Einbindung ist der DOM bereits verfügbar und die Initialisierung kann sofort erfolgen.
      */
@@ -393,6 +444,7 @@
      * Diese explizite Freigabe stellt den Button-Aufruf her.
      */
     window.saveRow = saveRow;
+    window.deleteRow = deleteRow;
 })();
 </script>
 <?php

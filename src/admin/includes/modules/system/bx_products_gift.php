@@ -23,6 +23,7 @@
 		public string $description;
 		public int $sort_order;
 		public bool $enabled;
+		public string $version;
 		private bool $_check;
 		public string $development_status; // 'p' = production ready, 'd' = in development, 'r' = draft
 
@@ -33,6 +34,7 @@
 			$this->sort_order  = defined('MODULE_BX_PRODUCTS_GIFT_SORT_ORDER') ? MODULE_BX_PRODUCTS_GIFT_SORT_ORDER : 0;
 			$this->enabled     = ((defined('MODULE_BX_PRODUCTS_GIFT_STATUS') && MODULE_BX_PRODUCTS_GIFT_STATUS == 'True') ? true : false);
 			$this->development_status = '';
+			 $this->version     = defined('MODULE_BX_PRODUCTS_GIFT_VERSION') ? MODULE_BX_PRODUCTS_GIFT_VERSION : '1.0.0';
 		}
 
 		/**

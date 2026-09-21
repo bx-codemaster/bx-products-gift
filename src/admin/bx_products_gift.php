@@ -21,13 +21,10 @@
   require_once(DIR_FS_INC.'xtc_datetime_short.inc.php');
   
   // Währungssymbol mit NumberFormatter ermitteln
-  $currency = 'EUR';
   $currency_symbol = '&euro;'; // Fallback
   if (class_exists('NumberFormatter')) {
-      $formatter = new NumberFormatter(DATE_LOCALE, NumberFormatter::CURRENCY);
-      $currency_symbol = $formatter->getSymbol(NumberFormatter::CURRENCY_SYMBOL);
-      $formatter->setTextAttribute(NumberFormatter::CURRENCY_CODE, $currency);
-      $currency_symbol = $formatter->getSymbol(NumberFormatter::CURRENCY_SYMBOL);
+    $formatter = new NumberFormatter(DATE_LOCALE, NumberFormatter::CURRENCY);
+    $currency_symbol = $formatter->getSymbol(NumberFormatter::CURRENCY_SYMBOL);
   }
 
   $actionWhitelist = array('delete', 'update', 'updateOrginal', 'new', 'load_products', 'get_gift_table');
@@ -81,14 +78,29 @@
       ), JSON_UNESCAPED_UNICODE);
       exit;
 
-    case 'delete': 
-      xtc_db_query("DELETE FROM ".TABLE_BX_PRODUCTS_GIFT." WHERE products_gift_id = '".(int)$_GET['id']."'");
+    case 'delete':
+      $gift_id = (int)($_POST['id'] ?? 0);
+      if ($gift_id <= 0) {
+        http_response_code(400);
+        exit('Invalid gift ID');
+      }
+
+      xtc_db_query("DELETE FROM ".TABLE_BX_PRODUCTS_GIFT." WHERE products_gift_id = '".$gift_id."'");
+
+      if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+        exit('success');
+      }
+
 			xtc_redirect(xtc_href_link(FILENAME_BX_PRODUCTS_GIFT));
     break;
 
     case 'update':
       $gift_id = (int)$_POST['save_id'];
-      $sum     = xtc_db_prepare_input($_POST['products_gift_sum']);
+      $sum = str_replace(',', '.', $_POST['products_gift_sum'] ?? '');
+      if (!is_numeric($sum)) {
+        exit('invalid value');
+      }
+      $sum = xtc_db_prepare_input($sum);
 
       xtc_db_query("UPDATE ".TABLE_BX_PRODUCTS_GIFT." SET 
         products_gift_sum      = '".$sum."' 
@@ -101,14 +113,6 @@
 
       xtc_redirect(xtc_href_link(FILENAME_BX_PRODUCTS_GIFT));
     break;
-
-		case 'updateOrginal':
-      $products_gift_sum = xtc_db_prepare_input($_POST['products_gift_sum']);
-			xtc_db_query("UPDATE ".TABLE_BX_PRODUCTS_GIFT." SET 
-				products_gift_sum = '".$products_gift_sum."' 
-				WHERE products_gift_id = '".(int)$_POST['products_gift_id']."'");
-			xtc_redirect(xtc_href_link(FILENAME_BX_PRODUCTS_GIFT));
-		break;
     
     case 'new':
       $products_id = (int)($_POST['products_gift'] ?? 0);
@@ -173,6 +177,16 @@
 
       $products_gift_table_query = xtc_db_query($products_gift_table);
       $data = array();
+      $customer_group_names = array();
+      $customer_group_query = xtc_db_query(
+        "SELECT customers_status_id, customers_status_name
+           FROM " . TABLE_CUSTOMERS_STATUS . "
+          WHERE language_id = " . (int)$_SESSION['languages_id']
+      );
+
+      while ($customer_group = xtc_db_fetch_array($customer_group_query, true)) {
+        $customer_group_names[(int)$customer_group['customers_status_id']] = $customer_group['customers_status_name'];
+      }
 
       while($products_gift = xtc_db_fetch_array($products_gift_table_query)) {
         $name = empty($products_gift['products_name']) ? BX_TEXT_TRANSLATION_MISSING : $products_gift['products_name'];
@@ -182,9 +196,10 @@
         $group_list_count = count($group_list);
 
         for($a = 0; $a < $group_list_count; $a++) {
-          $group_list[$a] = trim($group_list[$a]) === 'all'
+          $group_id = trim($group_list[$a]);
+          $group_list[$a] = $group_id === 'all'
             ? TXT_ALL
-            : xtc_get_customers_status_name($group_list[$a], $_SESSION['languages_id']);
+            : ($customer_group_names[(int)$group_id] ?? '');
         }
 
         $tax_rate = (float)xtc_get_tax_rate($products_gift['products_tax_class_id']);
@@ -199,7 +214,18 @@
         );
       }
 
-      echo json_encode(array('success' => true, 'items' => $data), JSON_UNESCAPED_UNICODE);
+      echo json_encode(array(
+        'success' => true,
+        'items'   => $data,
+        'labels'  => array(
+          'net'           => BX_TEXT_NET,
+          'gross'         => BX_TEXT_GROSS,
+          'enterNet'      => BX_TEXT_ENTER_NET,
+          'enterGross'    => BX_TEXT_ENTER_GROSS,
+          'confirmDelete' => BX_TEXT_PRODUCTS_GIFT_CONFIRM_DELETE,
+          'delete'        => BX_TEXT_PRODUCTS_GIFT_DELETE,
+        ),
+      ), JSON_UNESCAPED_UNICODE);
       exit;  
     }
   

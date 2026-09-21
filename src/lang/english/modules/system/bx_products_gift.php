@@ -22,10 +22,8 @@
   $module_description = '<details class="bxac-card">
 <summary class="bxac-summary" style="list-style: none;">
   <span class="bxac-arrow">▸</span>
-  <span class="bxac-title">'
-  .xtc_image(DIR_WS_ICONS.'heading/bx_products_gift.png', 'BX Products Gift', '', '', 'style="max-height: 32px; margin-right: 8px;"')
-  .' BX Products Gift
-  </span>
+  ' . xtc_image(DIR_WS_ICONS.'heading/bx_products_gift.png', 'BX Products Gift', '', '', 'style="max-height: 32px; margin-right: 8px;"') . '
+  <span class="bxac-title">BX Products Gift</span>
 </summary>
 <div class="bxac-body">
   <p>This module allows the configuration of product additions that can be added from a specified order value.</p>';

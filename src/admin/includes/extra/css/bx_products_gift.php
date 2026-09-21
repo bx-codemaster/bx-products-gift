@@ -97,6 +97,14 @@ p.column-label {
   text-decoration: none;
 }
 
+.bx-save-success {
+  background-color: #36e25e !important;
+}
+
+.bx-save-error {
+  background-color: #f08a8a !important;
+}
+
 .gift-customer-groups .ChkBox {
     /* das native Checkbox-Icon des Browsers ausblenden */
     opacity: 0;
