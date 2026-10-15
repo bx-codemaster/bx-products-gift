@@ -13,20 +13,32 @@
   define('MODULE_PRODUCTS_GIFT_PAGE_TITLE', 'BX Products Gift');
   define('MODULE_PRODUCTS_GIFT_PAGE_SUBTITLE', 'Produktzugaben für Kunden');
 
-	define('MODULE_PRODUCTS_GIFT_BANNER_TITLE', '🚀 BX Products Gift v'.(defined('MODULE_BX_PRODUCTS_GIFT_VERSION') ? MODULE_BX_PRODUCTS_GIFT_VERSION : ''));
+	define('MODULE_PRODUCTS_GIFT_BANNER_TITLE', '🚀 BX Products Gift v'.(defined('MODULE_BX_PRODUCTS_GIFT_VERSION') ? MODULE_BX_PRODUCTS_GIFT_VERSION : ' '));
 	define('MODULE_PRODUCTS_GIFT_BANNER_SUBTITLE', 'Professionelle Lösung für Produktzugaben');
 
 	define('MODULE_TEXT_SAVE', 'Einstellungen speichern');
 	define('MODULE_TEXT_SAVE_SUCCESS', 'Einstellungen erfolgreich gespeichert');
 
 	define('BX_TEXT_PRODUCTS_NAME', 'Produktname');
-	define('BX_TEXT_TRANSLATION_MISSING', '<span style="color: red;">Übersetzung fehlt</span>');
+	define('BX_TEXT_TRANSLATION_MISSING_PLAIN', 'Übersetzung fehlt');
+	// Rückwärtskompatibler Alias: frühere Versionen betteten hier rohes HTML ein.
+	// Seit die Tabelle per AJAX/JSON aufgebaut wird, läuft der Text durch die
+	// clientseitige esc()-Funktion, die HTML-Tags escaped statt sie zu rendern -
+	// eingebettetes Markup würde daher nur noch als Text angezeigt.
+	define('BX_TEXT_TRANSLATION_MISSING', BX_TEXT_TRANSLATION_MISSING_PLAIN);
 	define('BX_TEXT_PRODUCTS_GIFT_SUM', 'Gratis ab einem Bestellwert von:');
 	define('BX_TEXT_PRODUCTS_GIFT_SUM_UPDATE', '&quot;Gratis ab ...&quot; aktualisieren');
 	define('BX_TEXT_PRODUCTS_GIFT_GROUP', 'Sichtbar für Kundengruppe');
 	define('BX_TEXT_PRODUCTS_GIFT_ID', 'ID');
 	define('BX_TEXT_PRODUCTS_GIFT_ACTION', 'Aktion');
 	define('BX_TEXT_PRODUCTS_GIFT_CREATED_AT', 'Erstellt am');
+	define('BX_TEXT_GIFT_SCOPE', 'Gültigkeit');
+	define('BX_TEXT_GIFT_SCOPE_GLOBAL', 'Globaler Warenkorb');
+	define('BX_TEXT_GIFT_SCOPE_CATEGORY', 'Kategorie');
+	define('BX_TEXT_GIFT_MATCH_MODE', 'Kategoriebedingung');
+	define('BX_TEXT_GIFT_MATCH_ANY', 'Mindestens ein Artikel');
+	define('BX_TEXT_GIFT_MATCH_ALL', 'Alle Artikel');
+	define('BX_TEXT_GIFT_PRODUCT_CATEGORY', 'Zugabe-Kategorie');
 
 	define('BX_TEXT_PRODUCTS_GIFT_CONFIRM_DELETE', 'Diese Produktzugabe wirklich löschen?');
 	define('BX_TEXT_PRODUCTS_GIFT_DELETE', 'Löschen');

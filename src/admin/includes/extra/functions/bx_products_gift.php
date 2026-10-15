@@ -1,6 +1,6 @@
 <?php
 // Prüfung ob Artikel als Gratisartikel zugelassen
-// return false oder products_id
+// return true, wenn der Gratisartikel dem Warenkorb hinzugefügt werden darf, sonst false
 function pg_check_gift( int $products_gift_id ): bool {
   global $xtPrice;
   
@@ -11,7 +11,9 @@ function pg_check_gift( int $products_gift_id ): bool {
   $sql = "SELECT 
             products_id,
             products_gift_sum,
-            customers_groups
+            customers_groups,
+            trigger_category_id,
+            category_match_mode
           FROM ".TABLE_BX_PRODUCTS_GIFT."
           WHERE products_gift_id='".$products_gift_id."'";
 
@@ -22,9 +24,12 @@ function pg_check_gift( int $products_gift_id ): bool {
     return false;                                         // nein, ende
   }
                                                           // passende kundengruppe?
-  $group_list = explode(',', $data['customers_groups']);
-  if( !in_array( $_SESSION['customers_status']['customers_status_id'], $group_list) ) {
+  if( !pg_customer_group_allowed( $data['customers_groups'], $_SESSION['customers_status']['customers_status_id'] ) ) {
     return false;                                         // nein, ende
+  }
+
+  if( !pg_gift_category_allowed( (int)$data['trigger_category_id'], $data['category_match_mode'] ) ) {
+    return false;
   }
   
   $fdc              = 1.0/$xtPrice->currencies[$_SESSION['currency']]['value'];  // Währungsfaktor (falls Währung!=Defaultwährung)
@@ -61,7 +66,9 @@ function pg_check_gift_in_cart(): void {
       $sql = "SELECT 
                 products_id,
                 products_gift_sum,
-                customers_groups
+                customers_groups,
+                trigger_category_id,
+                category_match_mode
               FROM ".TABLE_BX_PRODUCTS_GIFT."
               WHERE products_gift_id='".$products_gift_id."'";
 
@@ -76,10 +83,14 @@ function pg_check_gift_in_cart(): void {
     }
         
                                                             // passende Kundengruppe? (sollte hier nie vorkommen)
-    $group_list = explode(',', $data['customers_groups']);
-    if( !in_array( $_SESSION['customers_status']['customers_status_id'], $group_list) ) {
+    if( !pg_customer_group_allowed( $data['customers_groups'], $_SESSION['customers_status']['customers_status_id'] ) ) {
       $_SESSION['cart']->remove($cart_product['id']);                 // löschen aus WK
       continue;                                                       // und nächster Artikel
+    }
+
+    if( !pg_gift_category_allowed( (int)$data['trigger_category_id'], $data['category_match_mode'] ) ) {
+      $_SESSION['cart']->remove($cart_product['id']);
+      continue;
     }
     
     if( $cart_sum_defcurr < $data['products_gift_sum'] ) {            // ausreichend Bestellwert?
@@ -87,6 +98,86 @@ function pg_check_gift_in_cart(): void {
       continue;                                                       // und nächster Artikel
     }
   } // foreach
+}
+
+/**
+ * Prüft die Kategoriebedingung einer Produktzugabe gegen reguläre Warenkorbpositionen.
+ * Kategorie 0 steht für eine globale Zugabe. Bei "all" müssen alle regulären
+ * Produkte direkt der Kategorie zugeordnet sein; Geschenkartikel zählen nicht mit.
+ */
+if (!function_exists('pg_gift_category_allowed')) {
+  function pg_gift_category_allowed( int $category_id, string $match_mode ): bool {
+    if ($category_id <= 0) {
+      return true;
+    }
+
+    $cart_products = $_SESSION['cart']->get_products();
+    $product_ids = array();
+    if (is_array($cart_products)) {
+      foreach ($cart_products as $cart_product) {
+        if (($cart_product['products_gift'] ?? false) === true) {
+          continue;
+        }
+
+        $cart_product_id = $cart_product['products_id'] ?? $cart_product['id'] ?? 0;
+        $product_id = function_exists('xtc_get_prid') ? (int)xtc_get_prid($cart_product_id) : (int)$cart_product_id;
+        if ($product_id > 0) {
+          $product_ids[$product_id] = $product_id;
+        }
+      }
+    }
+
+    if (count($product_ids) === 0) {
+      return false;
+    }
+
+    $product_id_list = implode(',', array_map('intval', $product_ids));
+    $category_query = xtc_db_query(
+      "SELECT DISTINCT products_id
+         FROM " . TABLE_PRODUCTS_TO_CATEGORIES . "
+        WHERE categories_id = " . (int)$category_id . "
+          AND products_id IN (" . $product_id_list . ")"
+    );
+    $matching_products = array();
+    while ($category_product = xtc_db_fetch_array($category_query)) {
+      $matching_products[(int)$category_product['products_id']] = true;
+    }
+
+    if ($match_mode === 'all') {
+      return count($matching_products) === count($product_ids);
+    }
+
+    return count($matching_products) > 0;
+  }
+}
+
+/**
+ * Prüft, ob eine Kundengruppe für eine Produktzugabe berechtigt ist.
+ *
+ * Die im Admin gespeicherte Checkbox "Alle" liefert den Sonderwert 'all'
+ * statt einer konkreten customers_status_id (siehe categories.php und die
+ * Anzeigelogik in admin/bx_products_gift.php, die 'all' bereits als TXT_ALL
+ * anzeigt). Ohne diese Sonderbehandlung greift in_array() nie, weil eine
+ * numerische Kundengruppen-ID niemals dem String 'all' entspricht - jede
+ * Zugabe mit "Alle" ausgewählt würde dadurch für keinen einzigen Kunden
+ * funktionieren.
+ *
+ * @param string $customers_groups  Kommagetrennte Liste aus customers_status_id
+ *                                   und/oder dem Sonderwert 'all'.
+ * @param int    $customers_status_id  Kundengruppen-ID des aktuellen Besuchers.
+ *
+ * @return bool
+ */
+if (!function_exists('pg_customer_group_allowed')) {
+  function pg_customer_group_allowed( string $customers_groups, int $customers_status_id ): bool {
+    $group_list = array_map('trim', explode(',', $customers_groups));
+
+    if( in_array('all', $group_list, true) ) {
+      return true;
+    }
+
+    return in_array( (string)$customers_status_id, $group_list, true );
+  }
 }
 
 /**

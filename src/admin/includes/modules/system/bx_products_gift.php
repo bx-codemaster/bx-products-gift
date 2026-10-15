@@ -34,7 +34,7 @@
 			$this->sort_order  = defined('MODULE_BX_PRODUCTS_GIFT_SORT_ORDER') ? MODULE_BX_PRODUCTS_GIFT_SORT_ORDER : 0;
 			$this->enabled     = ((defined('MODULE_BX_PRODUCTS_GIFT_STATUS') && MODULE_BX_PRODUCTS_GIFT_STATUS == 'True') ? true : false);
 			$this->development_status = '';
-			 $this->version     = defined('MODULE_BX_PRODUCTS_GIFT_VERSION') ? MODULE_BX_PRODUCTS_GIFT_VERSION : '1.0.0';
+			 $this->version     = defined('MODULE_BX_PRODUCTS_GIFT_VERSION') ? MODULE_BX_PRODUCTS_GIFT_VERSION : '1.1.0';
 		}
 
 		/**
@@ -98,7 +98,7 @@
 															use_function, 
 															set_function )
 										VALUES ('MODULE_BX_PRODUCTS_GIFT_STATUS', 'True', '".$freeId["id"]."', '1', NOW(), '', 'xtc_cfg_select_option(array(\'True\', \'False\'), '),
-														('MODULE_BX_PRODUCTS_GIFT_VERSION', '1.0.0', '".$freeId["id"]."', '2', NOW(), '', ''),
+										('MODULE_BX_PRODUCTS_GIFT_VERSION', '1.1.0', '".$freeId["id"]."', '2', NOW(), '', ''),
 														('MODULE_BX_PRODUCTS_GIFT_CONFIG_ID', '".$freeId["id"]."', '".$freeId["id"]."', '3', NOW(), '', 'bx_configuration_field_version(')";
 			xtc_db_query($query);
 
@@ -107,12 +107,34 @@
 				products_id VARCHAR(255) NOT NULL,
 				products_gift_sum DECIMAL(14,2) NOT NULL DEFAULT '0.00',
 				customers_groups VARCHAR(100) NOT NULL DEFAULT '',
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				trigger_category_id INT(11) NOT NULL DEFAULT '0',
+				category_match_mode VARCHAR(3) NOT NULL DEFAULT 'any',
 				PRIMARY KEY (products_gift_id)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+			$this->ensureGiftRuleColumns();
 			
 		}
 
-		public function update(): void {}
+		public function update(): void {
+			$this->ensureGiftRuleColumns();
+			xtc_db_query("UPDATE " . TABLE_CONFIGURATION . " SET configuration_value = '1.1.0' WHERE configuration_key = 'MODULE_BX_PRODUCTS_GIFT_VERSION'");
+		}
+
+		private function ensureGiftRuleColumns(): void {
+			$columns = array(
+				'created_at' => "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+				'trigger_category_id' => "INT(11) NOT NULL DEFAULT '0'",
+				'category_match_mode' => "VARCHAR(3) NOT NULL DEFAULT 'any'",
+			);
+
+			foreach ($columns as $column => $definition) {
+				$column_query = xtc_db_query("SHOW COLUMNS FROM bx_products_gift LIKE '" . $column . "'");
+				if (xtc_db_num_rows($column_query) === 0) {
+					xtc_db_query("ALTER TABLE bx_products_gift ADD " . $column . " " . $definition);
+				}
+			}
+		}
 			
 		/**
 			* Actions performed when the user clicks the uninstall button.

@@ -89,6 +89,10 @@ p.column-label {
   color: #AF417E;
 }
 
+.bx-translation-missing {
+  color: red;
+}
+
 .dataTableContent.editButtons {
   vertical-align: bottom !important;
 }

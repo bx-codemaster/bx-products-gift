@@ -6,18 +6,17 @@
 
   if (defined('MODULE_BX_PRODUCTS_GIFT_STATUS') && 'True' == MODULE_BX_PRODUCTS_GIFT_STATUS && basename($_SERVER['PHP_SELF']) == 'bx_products_gift.php') {
     
-    /** 
-     * CSRF-Token für AJAX-Requests vorbereiten. Der Wert wird als JSON-Fragment aufgebaut, 
-     * damit er sicher in den $.post-Aufruf eingebettet werden kann, unabhängig davon, welche Zeichen Session-Name/-Token enthalten.
-     */
-    $addPayload = '';
-    if (isset($_SESSION['CSRFName']) && isset($_SESSION['CSRFToken'])) {
-      $addPayload = json_encode($_SESSION['CSRFName']) . ': ' . json_encode($_SESSION['CSRFToken']) . ',' . PHP_EOL;
-    }
+    // Hinweis: Der CSRF-Token wird bewusst NICHT mehr einmalig beim Seitenaufbau
+    // eingebettet. Modified rotiert den Token nach jeder validierten Anfrage,
+    // wodurch ein statisch eingebetteter Wert bereits nach der ersten AJAX-
+    // Aktion ungültig wäre. Stattdessen holt sich jede mutierende Aktion
+    // (saveRow, deleteRow, das "Neu anlegen"-Formular) unmittelbar vor dem
+    // eigentlichen Request per action=get_csrf_token einen frischen Token
+    // (siehe withFreshToken() weiter unten).
 ?>
 <script>
 /** 
- * Das Modul verwendet eine IIFE, damit Hilfsvariablen und interne Funktionen nicht in den globalen JavaScript-Namensraum gelangen.
+ * Das Modul verwendet eine IIFE („Immediately Invoked Function Expression“), damit Hilfsvariablen und interne Funktionen nicht in den globalen JavaScript-Namensraum gelangen.
  * Die Initialisierung wartet bei noch ladendem DOM auf DOMContentLoaded;
  * ist das DOM bereits verfügbar, startet sie unmittelbar.
  */
@@ -100,6 +99,32 @@
     }
 
     /**
+     * Holt unmittelbar vor einer mutierenden Aktion einen frischen CSRF-Token
+     * vom Server und liefert ihn als Payload-Objekt ({name: token} oder {},
+     * falls die Session keinen CSRF-Schutz konfiguriert hat). So verwendet
+     * jede Aktion garantiert den zum Zeitpunkt des Requests gültigen Token,
+     * unabhängig davon, wie oft er seit dem Seitenaufbau bereits rotiert ist.
+     *
+     * Das Holen selbst (action=get_csrf_token) ist rein lesend und löst
+     * daher keine erneute Rotation aus.
+     */
+    function withFreshToken(callback) {
+        $.getJSON(<?php echo json_encode(FILENAME_BX_PRODUCTS_GIFT . '?action=get_csrf_token'); ?>, function(res) {
+            var payload = {};
+            if (res && res.success && res.name) {
+                payload[res.name] = res.token;
+            }
+            callback(payload);
+        }).fail(function() {
+            // Konnte der Token nicht geholt werden (z.B. Netzwerkfehler),
+            // wird trotzdem versucht, ohne Token zu senden. Der Server lehnt
+            // die Anfrage dann regulär als CSRF-ungültig ab, statt dass hier
+            // stillschweigend nichts passiert.
+            callback({});
+        });
+    }
+
+    /**
      * Speichert den Netto-Wert einer einzelnen Geschenkartikelzeile per AJAX.
      * Die Funktion wird weiter unten an window gehängt, weil der Speichern-Button im PHP-HTML über onclick="saveRow(...)" auf sie zugreift.
      */
@@ -108,30 +133,33 @@
         // Dadurch wird genau der Wert der angeklickten Zeile gespeichert.
         var sumVal = $('#gift_sum_netto_' + giftId).val().replace(',', '.');
 
-        // Der PHP-Handler erkennt action=update und erhält die Datensatz-ID
-        // zusammen mit dem eingegebenen Netto-Betrag.
-        $.post(<?php echo json_encode(FILENAME_BX_PRODUCTS_GIFT . '?action=update'); ?>, {
-            save_id: giftId,
-            products_gift_sum: sumVal,
-            <?php echo $addPayload; ?>
-        }, function(response) {
-            // Eine erfolgreiche Serverantwort wird durch kurzes grünes
-            // Aufleuchten beider zusammengehöriger Eingabefelder angezeigt.
-            $('#gift_sum_netto_' + giftId).removeClass('bx-save-error').addClass('bx-save-success');
-            $('#gift_sum_brutto_' + giftId).removeClass('bx-save-error').addClass('bx-save-success');
-            setTimeout(function() {
-                $('#gift_sum_netto_' + giftId).removeClass('bx-save-success');
-                $('#gift_sum_brutto_' + giftId).removeClass('bx-save-success');
-            }, 1000);
-        }).fail(function() {
-            // Bei Netzwerkfehlern oder einer nicht erfolgreichen AJAX-Antwort
-            // wird die betroffene Zeile kurz rot markiert.
-            $('#gift_sum_netto_' + giftId).removeClass('bx-save-success').addClass('bx-save-error');
-            $('#gift_sum_brutto_' + giftId).removeClass('bx-save-success').addClass('bx-save-error');
-            setTimeout(function() {
-                $('#gift_sum_netto_' + giftId).removeClass('bx-save-error');
-                $('#gift_sum_brutto_' + giftId).removeClass('bx-save-error');
-            }, 1000);
+        withFreshToken(function(csrfPayload) {
+            // Der PHP-Handler erkennt action=update und erhält die Datensatz-ID
+            // zusammen mit dem eingegebenen Netto-Betrag und dem frischen Token.
+            $.post(<?php echo json_encode(FILENAME_BX_PRODUCTS_GIFT . '?action=update'); ?>,
+                $.extend({
+                    save_id: giftId,
+                    products_gift_sum: sumVal
+                }, csrfPayload)
+            , function(response) {
+                // Eine erfolgreiche Serverantwort wird durch kurzes grünes
+                // Aufleuchten beider zusammengehöriger Eingabefelder angezeigt.
+                $('#gift_sum_netto_' + giftId).removeClass('bx-save-error').addClass('bx-save-success');
+                $('#gift_sum_brutto_' + giftId).removeClass('bx-save-error').addClass('bx-save-success');
+                setTimeout(function() {
+                    $('#gift_sum_netto_' + giftId).removeClass('bx-save-success');
+                    $('#gift_sum_brutto_' + giftId).removeClass('bx-save-success');
+                }, 1000);
+            }).fail(function() {
+                // Bei Netzwerkfehlern oder einer nicht erfolgreichen AJAX-Antwort
+                // wird die betroffene Zeile kurz rot markiert.
+                $('#gift_sum_netto_' + giftId).removeClass('bx-save-success').addClass('bx-save-error');
+                $('#gift_sum_brutto_' + giftId).removeClass('bx-save-success').addClass('bx-save-error');
+                setTimeout(function() {
+                    $('#gift_sum_netto_' + giftId).removeClass('bx-save-error');
+                    $('#gift_sum_brutto_' + giftId).removeClass('bx-save-error');
+                }, 1000);
+            });
         });
     }
 
@@ -144,11 +172,12 @@
             return false;
         }
 
-        $.post(<?php echo json_encode(FILENAME_BX_PRODUCTS_GIFT . '?action=delete'); ?>, {
-            id: giftId,
-            <?php echo $addPayload; ?>
-        }).done(function() {
-            window.location.reload();
+        withFreshToken(function(csrfPayload) {
+            $.post(<?php echo json_encode(FILENAME_BX_PRODUCTS_GIFT . '?action=delete'); ?>,
+                $.extend({ id: giftId }, csrfPayload)
+            ).done(function() {
+                window.location.reload();
+            });
         });
 
         return false;
@@ -169,7 +198,7 @@
         }
 
         // Während des Ladens wird ein neutraler Status in der Tabelle angezeigt.
-        $tbody.html('<tr><td colspan="5" class="txta-c" style="padding: 15px;"><?php echo BX_TEXT_LOADING_PRODUCTS; ?></td></tr>');
+        $tbody.html('<tr><td colspan="6" class="txta-c" style="padding: 15px;"><?php echo BX_TEXT_LOADING_PRODUCTS; ?></td></tr>');
 
         /**
          * Die Tabelle wird als JSON geladen. Die PHP-Antwort enthält die bereits
@@ -193,7 +222,7 @@
 
             // Ein erfolgreicher Aufruf kann trotzdem keine gespeicherten Geschenkartikel liefern.
             if (items.length === 0) {
-                $tbody.html('<tr><td colspan="5" class="txta-c"><?php echo BX_TEXT_NO_PRODUCTS_AVAILABLE; ?></td></tr>');
+                $tbody.html('<tr><td colspan="6" class="txta-c"><?php echo BX_TEXT_NO_PRODUCTS_AVAILABLE; ?></td></tr>');
                 return;
             }
 
@@ -217,9 +246,10 @@
                 <tr class="dataTableRow" style="display: none;">
                     <td class="dataTableContent txta-c">${esc(item.id)}</td>
                     <td class="dataTableContent">
-                    ${esc(item.name)} <input type="hidden" name="products_gift_id" value="${esc(item.id)}">
+                    <span${item.nameMissing ? ' class="bx-translation-missing"' : ''}>${esc(item.name)}</span> <input type="hidden" name="products_gift_id" value="${esc(item.id)}">
                     <br><span class="extra_fast"><?php echo BX_TEXT_PRODUCTS_GIFT_GROUP; ?>:</span> ${esc(item.groups)}
                     </td>
+                    <td class="dataTableContent">${esc(item.scope)}</td>
                     <td class="dataTableContent">
                     <div class="gift-select-row">
                         <label>${labels.net}
